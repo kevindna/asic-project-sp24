@@ -1,0 +1,14 @@
+skel/build
+skel/*output
+
+skel/tests/bmark/*
+!skel/tests/bmark/*.c
+!skel/tests/bmark/*.s
+!skel/tests/bmark/*.ld
+!skel/tests/bmark/*.out
+!skel/tests/bmark/Makefile
+
+skel/tests/asm/*
+!skel/tests/asm/Makefile
+!skel/tests/asm/env_151
+!skel/tests/asm/riscv-tests
