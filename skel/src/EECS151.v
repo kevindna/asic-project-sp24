@@ -27,7 +27,7 @@ module REGISTER(q, d, clk);
    parameter N = 1;
    output reg [N-1:0] q;
    input [N-1:0]      d;
-   input 	     clk;
+   input       clk;
    always @(posedge clk)
     q <= d;
 endmodule // REGISTER
@@ -37,7 +37,7 @@ module REGISTER_CE(q, d, ce, clk);
    parameter N = 1;
    output reg [N-1:0] q;
    input [N-1:0]      d;
-   input 	      ce, clk;
+   input        ce, clk;
    always @(posedge clk)
      if (ce) q <= d;
 endmodule // REGISTER_CE
@@ -48,7 +48,7 @@ module REGISTER_R(q, d, rst, clk);
    parameter INIT = {N{1'b0}};
    output reg [N-1:0] q;
    input [N-1:0]      d;
-   input 	      rst, clk;
+   input        rst, clk;
    always @(posedge clk)
      if (rst) q <= INIT;
      else q <= d;
@@ -61,7 +61,7 @@ module REGISTER_R_CE(q, d, rst, ce, clk);
    parameter INIT = {N{1'b0}};
    output reg [N-1:0] q;
    input [N-1:0]      d;
-   input 	      rst, ce, clk;
+   input        rst, ce, clk;
    always @(posedge clk)
      if (rst) q <= INIT;
      else if (ce) q <= d;
@@ -81,12 +81,12 @@ module RAM(q, d, addr, we, clk);
    parameter DEPTH = 256;              // Memory depth
    input [DWIDTH-1:0] d;               // Data input
    input [AWIDTH-1:0] addr;            // Address input
-   input 	      we, clk;
+   input        we, clk;
    reg [DWIDTH-1:0]   mem [DEPTH-1:0];
    output [DWIDTH-1:0] q;
    always @(posedge clk)
       if (we) mem[addr] <= d;
-   assign q = mem[addr];
+   assign d = mem[addr];
 endmodule // RAM
 
 /*

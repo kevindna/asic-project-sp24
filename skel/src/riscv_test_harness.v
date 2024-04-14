@@ -177,7 +177,6 @@ module rocketTestHarness;
       end
     end
 `endif
-
     // Strobe reset
     #100 reset = 0;
   end
@@ -249,6 +248,7 @@ module rocketTestHarness;
   always @(posedge clk)
   begin
     trace_count = trace_count + 1;
+    //$display("COUNTING:%d", trace_count);
 `ifdef GATE_LEVEL
     if (verbose)
     begin

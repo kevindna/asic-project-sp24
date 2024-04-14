@@ -3,7 +3,7 @@ simClockPeriod : &SIM_CLK_PERIOD "CLOCK_PERIOD=20.00"
 simOptions: &SIM_OPTIONS
   - "-notice"
   - "-line"
-  - "+lint=all,noVCDE,noONGS,noUI"
+    #- "+lint=all,noVCDE,noONGS,noUI"
   - "+warn=noTMR"
   - "-error=PCWM-L"
   - "+v2k"
@@ -11,30 +11,39 @@ simOptions: &SIM_OPTIONS
   - "+vcs+lic+wait"
   - "+vcs+initreg+random"
   - "+define+no_cache_mem"
+  - "+define+NO_PRIMITIVES"
   - "+rad"
   - "-quiet"
   - "+define+DEBUG"
   - "+incdir+../../src"
+  - "+vcdplusfile=sim_debug.vpd"
+  - "+max-cycles+500000"
   - "-sverilog"
 
 simVerilogSrc: &SIM_VERILOG_SRC
-  - "src/ALU.v"
-  - "src/ALUdec.v"
-  - "src/Riscv151.v"
+# - "src/ALU.v"
+# - "src/ALUdec.v"
+# - "src/Riscv151.v"
+  - "src/riscv_arbiter.v"
   - "src/Memory151.v"
   - "src/ExtMemModel.v"
   - "src/no_cache_mem.v"
-  - "src/Cache.v"
-  - "src/riscv_top.v"
-  - "src/riscv_arbiter.v"
-  - "src/ALUTestbench.v"
-  - "src/ALUTestVectorTestbench.v"
-  - "src/riscv_test_harness.v"
+  - "src/cache.v"
   # Add more files here if you need
+  - "src/async_2r1wram.v"   
+  - "src/alu.v"
+  - "src/fetch.v"    
+  - "src/decode.v"    
+  - "src/execute.v" 
+  - "src/cpu.v"
+  - "src/riscv_top.v"
+  - "src/riscv_test_harness.v"
+  # - "src/ALUTestbench.v"
+  # - "src/ALUTestVectorTestbench.v"
 
-tb_name: &TB_NAME "ALUTestbench"
+# tb_name: &TB_NAME "ALUTestbench"
 #tb_name: &TB_NAME "ALUTestVectorTestbench"
-#tb_name: &TB_NAME "rocketTestHarness"
+tb_name: &TB_NAME "rocketTestHarness"
 
 # RTL Simulation Variables
 sim.inputs:
@@ -46,4 +55,7 @@ sim.inputs:
   defines: 
     - *SIM_CLK_PERIOD
   execute_sim: false
+
+
+
 

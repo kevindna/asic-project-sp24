@@ -60,7 +60,7 @@ module riscv_top
     .mem_resp_tag(mem_resp_tag[`MEM_TAG_BITS-1:0]));
   
   // RISC-V 151 CPU
-  Riscv151 cpu(
+  cpu cpu0(
       // Outputs
       .dcache_addr(dcache_addr[31:0]),
       .icache_addr(icache_addr[31:0]),
@@ -70,11 +70,13 @@ module riscv_top
       .dcache_din(dcache_din[31:0]),
       // Inputs
       .clk(clk),
-      .reset(reset),
+      .rst(reset),
       .dcache_dout(dcache_dout[31:0]),
       .icache_dout(icache_dout[31:0]),
       .csr(csr),
-      .stall(stall));
+      .mem_stall(stall));
 
 endmodule
+
+
 

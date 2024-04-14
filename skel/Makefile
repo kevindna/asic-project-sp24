@@ -31,7 +31,7 @@ OBJ_DIR             ?= $(vlsi_dir)/build
 ENV_YML             ?= $(vlsi_dir)/inst-env.yml
 TECH_CONF           ?= $(vlsi_dir)/sky130.yml
 
-DESIGN_SYN_CONF        ?= $(vlsi_dir)/syn.yml
+DESIGN_SYN_CONF        ?= $(vlsi_dir)/syn-rf.yml
 DESIGN_PAR_CONF        ?= $(vlsi_dir)/par.yml
 DESIGN_SIM_RTL_CONF    ?= $(vlsi_dir)/sim-rtl.yml
 DESIGN_SIM_GL_SYN_CONF ?= $(vlsi_dir)/sim-gl-syn.yml

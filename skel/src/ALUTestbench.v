@@ -11,7 +11,7 @@
 `timescale 1ns / 1ps
 
 `include "Opcode.vh"
-`include "ALUop.vh"
+`include "aluop.vh"
 
 module ALUTestbench();
 
@@ -69,7 +69,7 @@ module ALUTestbench();
         .add_rshift_type(add_rshift_type),
         .ALUop(ALUop));
 
-    ALU DUT2( .A(A),
+    alu DUT2( .A(A),
         .B(B),
         .ALUop(ALUop),
         .Out(DUTout));

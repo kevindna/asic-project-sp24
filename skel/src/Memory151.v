@@ -1,3 +1,4 @@
+`include "const.vh" 
 
 module Memory151( 
   input clk,

@@ -1,0 +1,15 @@
+ALU_ADD 'h0  #ffffff #000000
+ALU_SUB 'h1  #ffffff #000000
+ALU_AND 'h2  #ffffff #000000
+ALU_OR 'h3  #ffffff #000000
+ALU_XOR 'h4  #ffffff #000000
+ALU_SLT 'h5  #ffffff #000000
+ALU_SLTU 'h6  #ffffff #000000
+ALU_SLL 'h7  #ffffff #000000
+ALU_SRA 'h8  #ffffff #000000
+ALU_SRL 'h9  #ffffff #000000
+ALU_COPY_B 'ha  #ffffff #000000
+ALU_XXX 'hf  #ffffff #000000
+0
+
+fff #000000

@@ -1,3 +1,5 @@
+`include "const.vh"
+
 module riscv_arbiter
 (
   input clk,
