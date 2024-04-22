@@ -17,6 +17,10 @@ module rocketTestHarness;
 
   always #(`CLOCK_PERIOD*0.5) clk = ~clk;
 
+  // Debug
+  wire [`CPU_ADDR_BITS-1:0] pc_dbg;
+  wire [`CPU_DATA_BITS-1:0] instr_dbg;
+
   wire mem_req_valid, mem_req_rw, mem_req_data_valid;
   wire [`MEM_TAG_BITS-1:0] mem_req_tag;
   wire [`MEM_ADDR_BITS-1:0] mem_req_addr;
@@ -37,6 +41,12 @@ module rocketTestHarness;
 
   riscv_top dut
     (
+
+      `ifdef DEBUG_OUT
+          .pc_dbg(pc_dbg),
+          .instr_dbg(instr_dbg),
+      `endif
+
       .clk(clk),
       .reset(r_reset),
 
@@ -101,7 +111,7 @@ module rocketTestHarness;
   reg [1023:0] vcdfile = 0;
   reg          stats_active = 0;
   reg          stats_tracking = 0;
-  reg          verbose = 0;
+  reg          verbose = 1;
   integer      stderr = 32'h80000002;
 
 
@@ -180,22 +190,40 @@ module rocketTestHarness;
     // Strobe reset
     #100 reset = 0;
   end
-
+  
+  reg dup = 1'b0;
+  reg [31:0] pc_track=0;
+  reg [31:0] x_val = 0;
+  integer i = 0;
+  integer j = 0;
+  reg [27:0] mem_addr = 0;
 
   reg [255:0] reason = 0;
   always @(posedge clk)
   begin
     //$fwrite(32'h80000002, "C%0d: csr: %d\n", trace_count, exit);
-    //$fwrite(32'h80000002, "C%d: %d [%d] pc=[%h] W[r%d=%h][%d] R[r%d=%h] R[r%d=%h] inst=[%h] DASM(%h)\n", T135, T133, T132, T130, T128, T127, T126, T124, T97, T95, T9, T8, T1);
+    // $fwrite(32'h80000002, "C%d: %d [%d] pc=[%h] W[r%d=%h][%d] R[r%d=%h] R[r%d=%h] inst=[%h] DASM(%h)\n", T135, T133, T132, T130, T128, T127, T126, T124, T97, T95, T9, T8, T1);
 
     if (reset == 0) begin
       #0.1;
       //$fwrite(32'h80000002, "C%0d: PC=%h W[r%d=%h] WE=%d DASM(%h)\n",trace_count,dut.cpu.dpath.pc_m,dut.cpu.dpath.wb_reg_m,dut.cpu.dpath.wb_value,dut.cpu.dpath.wb_reg_we,dut.cpu.dpath.inst_m);
       `ifndef GATELEVEL
-      $fwrite(32'h80000002, "C%0d: \n", trace_count);
+      // $fwrite(32'h80000002, "C%0d: \n", trace_count);
       `endif
-      
-      //$fwrite(32'h80000002, "C%0d: INST=%h PC_x=%h A=%h B=%h ALUout=%h\n",trace_count,dut.cpu.dpath.inst_x , dut.cpu.dpath.pc_x,dut.cpu.dpath.alu_a_input_x, dut.cpu.dpath.alu_b_input_x, dut.cpu.dpath.alu_out_x);
+
+      // Basic printout
+      $fwrite(32'h80000002, "CYCLES:%0d \tPC=[%h] INSTR=[%h] IMM=[%d]\n", trace_count, dut.cpu0.decode0.pc, dut.cpu0.decode0.instr, dut.cpu0.decode0.imm);
+
+
+      // if (dut.cpu0.decode0.pc == 'h20bc) begin 
+      //   x_val <= dut.cpu0.decode0.rf.ram[14];
+      // end
+      // if (dut.cpu0.decode0.pc == 'h2130)begin 
+      //   $fwrite(32'h80000002, "INTERMEDIATE RESULT: %d\n", dut.cpu0.decode0.rf.ram[15]);
+      // end
+
+
+      // $fwrite(32'h80000002, "C%0d: INST=%h PC_x=%h A=%h B=%h ALUout=%h\n",trace_count,dut.cpu.dpath.inst_x , dut.cpu.dpath.pc_x,dut.cpu.dpath.alu_a_input_x, dut.cpu.dpath.alu_b_input_x, dut.cpu.dpath.alu_out_x);
     end 
 
     if (max_cycles > 0 && trace_count > max_cycles) begin
@@ -208,6 +236,18 @@ module rocketTestHarness;
     begin
       $fdisplay(stderr, "*** FAILED *** (%0s) after %0d simulation cycles", reason, trace_count);
       `VCDPLUSCLOSE
+
+      // Dump memory
+      // for (i=0; i < 2*1024*1024;  i=i+1) begin
+      //   mem_addr = i;
+      //   // $fwrite(32'h80000002, "ADDR=[%h] DATA=[%h]\n", i, mem.ram[i]);
+      //   $fwrite(32'h80000002, "ADDR=[%h] DATA=[%d]\n", {i,2'd0,2'b0} , dut.mem.dcache.ram[mem_addr][31:0]);
+      //   $fwrite(32'h80000002, "ADDR=[%h] DATA=[%d]\n", {i,2'd1,2'b0} , dut.mem.dcache.ram[mem_addr][63:32]);
+      //   $fwrite(32'h80000002, "ADDR=[%h] DATA=[%d]\n", {i,2'd2,2'b0} , dut.mem.dcache.ram[mem_addr][95:64]);
+      //   $fwrite(32'h80000002, "ADDR=[%h] DATA=[%d]\n", {i,2'd3,2'b0} , dut.mem.dcache.ram[mem_addr][127:96]);
+      //   #1;
+      // end
+
       $finish;
     end
 
@@ -241,6 +281,7 @@ module rocketTestHarness;
   begin
     if (verbose && mem_req_valid && mem_req_ready)
     begin
+      $fwrite(stderr, "MB: rw=%d addr=%x", mem_req_rw, {mem_req_addr,4'd0});
       $fdisplay(stderr, "MB: rw=%d addr=%x", mem_req_rw, {mem_req_addr,4'd0});
     end
   end
@@ -250,10 +291,10 @@ module rocketTestHarness;
     trace_count = trace_count + 1;
     //$display("COUNTING:%d", trace_count);
 `ifdef GATE_LEVEL
-    if (verbose)
-    begin
-      $fdisplay(stderr, "C: %10d", trace_count-1);
-    end
+    // if (verbose)
+    // begin
+    //   $fdisplay(stderr, "C: %10d", trace_count-1);
+    // end
 `endif
   end
 

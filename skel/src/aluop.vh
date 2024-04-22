@@ -1,20 +1,24 @@
 /**
  * List of ALU operations.
 */
+
+
+`include "Opcode.vh"
+
 `ifndef ALUOP
 `define ALUOP
 
-`define ALU_ADD     4'd0
-`define ALU_SUB     4'd1
-`define ALU_AND     4'd2
-`define ALU_OR      4'd3
-`define ALU_XOR     4'd4
-`define ALU_SLT     4'd5
-`define ALU_SLTU    4'd6
-`define ALU_SLL     4'd7
-`define ALU_SRA     4'd8
-`define ALU_SRL     4'd9
-`define ALU_COPY_B  4'd10
-`define ALU_XXX     4'd15
+`define ALU_ADD     {1'b0, `FNC_ADD_SUB}
+`define ALU_SUB     {1'b1, `FNC_ADD_SUB}
+`define ALU_AND     {1'b0, `FNC_AND}
+`define ALU_OR      {1'b0, `FNC_OR}
+`define ALU_XOR     {1'b0, `FNC_XOR}
+`define ALU_SLT     {1'b0, `FNC_SLT}
+`define ALU_SLTU    {1'b0, `FNC_SLTU}
+`define ALU_SLL     {1'b0, `FNC_SLL}
+`define ALU_SRA     {1'b1, `FNC_SRL_SRA}
+`define ALU_SRL     {1'b0, `FNC_SRL_SRA}
+`define ALU_COPY_B  4'hE
+`define ALU_XXX     4'hF
 
 `endif //ALUOP

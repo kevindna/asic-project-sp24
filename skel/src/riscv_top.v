@@ -2,6 +2,10 @@
 
 module riscv_top
 (
+  `ifdef DEBUG_OUT
+    output [`CPU_ADDR_BITS-1:0] pc_dbg,
+    output [`CPU_DATA_BITS-1:0] instr_dbg,
+  `endif
   input clk,
   input reset,
 
@@ -21,6 +25,7 @@ module riscv_top
   input [`MEM_DATA_BITS-1:0]  mem_resp_data,
   output [31:0]               csr
 );
+
 
   wire [31:0]   dcache_addr; // From cpu of Riscv151.v
   wire [31:0]   dcache_din;  // From cpu of Riscv151.v
@@ -61,6 +66,12 @@ module riscv_top
   
   // RISC-V 151 CPU
   cpu cpu0(
+      // DEBUG
+      `ifdef DEBUG_OUT
+      .pc_dbg     (pc_dbg),
+      .instr_dbg  (instr_dbg),
+      `endif
+
       // Outputs
       .dcache_addr(dcache_addr[31:0]),
       .icache_addr(icache_addr[31:0]),
@@ -77,6 +88,3 @@ module riscv_top
       .mem_stall(stall));
 
 endmodule
-
-
-

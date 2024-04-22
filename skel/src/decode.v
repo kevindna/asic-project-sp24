@@ -26,16 +26,22 @@ module decode (
   output [`CPU_DATA_BITS-1:0] ex_rs2data,
   output reg [3:0] alu_predecode,
   output [`DWIDTH-1:0] imm_gen,
+  output [2:0] partial_ld,            // Indicates load type
   // Memory
   output mem_re,
   input mem_stall,
-  output [3:0] mem_we,
+  output reg [3:0] mem_we,
+  output reg [`CPU_DATA_BITS-1:0] mem_wdata,
   output [`CPU_ADDR_BITS-1:0] mem_addr,
+  output [1:0] mem_alignment, // 2 LSbs since RISCV support alignement for the load type (i.e. byte, halfword, word support differnet memory alignments)
   // Writeback
+  output store, 
   input wb_we,
   input [4:0] wb_rd,
-  output store, 
+  input [2:0] wb_mask,
   output [1:0] wb_op_sel,
+  input [1:0] wb_mem_alignment,
+
   input [`DWIDTH-1:0] wb_data);
 
   /*************************************************/
@@ -55,6 +61,7 @@ module decode (
   wire [`DWIDTH-1:0] rs1data;
   wire [`DWIDTH-1:0] rs2data;
   wire wb_we_int; 
+  reg [`DWIDTH-1:0] wb_data_masked;   // Masked writeback data
   // Immediate generation
   reg [`DWIDTH-1:0] imm;
   wire [`DWIDTH-1:0] imm_ext;
@@ -105,7 +112,7 @@ module decode (
     // Write port 1
     .we(wb_we_int),
     .waddr0(wb_rd),
-    .wdata(wb_data));
+    .wdata(wb_data_masked));
 
 
   // Immediate generation
@@ -114,9 +121,9 @@ module decode (
       `OPC_ARI_RTYPE:             imm <= {{20{instr[31]}}, instr[31:20]};
       `OPC_STORE:                 imm <= {{20{instr[31]}}, instr[31:25], instr[11:7]};
       `OPC_BRANCH:                imm <= {{19{instr[31]}}, instr[31], instr[7], instr[30:25], instr[11:8], 1'b0};
-      `OPC_JAL, `OPC_JALR:        imm <= {{12{instr[31]}}, instr[31], instr[18:12], instr[19], instr[30:20]};
+      `OPC_JAL:                   imm <= {{12{instr[31]}}, instr[31], instr[19:12], instr[20], instr[30:21], 1'b0};
       `OPC_LUI, `OPC_AUIPC:       imm <= {instr[31:12],12'b0};
-      `OPC_ARI_ITYPE,`OPC_LOAD:   imm <= {{20{instr[31]}}, instr[31:20]};
+      `OPC_ARI_ITYPE,`OPC_LOAD, `OPC_JALR:   imm <= ((opcode == `OPC_ARI_ITYPE) && (funct3 == `FNC_SRL_SRA)) ? {17'b0, instr[24:20]} : {{20{instr[31]}}, instr[31:20]};
       // `OPC_CSR :                  imm <= {20'b0, instr[31:20]};
       default:                    imm <= {{20{instr[31]}}, instr[31:20]};
     endcase
@@ -150,7 +157,7 @@ module decode (
   end
 
 
-  // Jump Addrr
+  // Jump Addr
   always @(*) begin : proc_jump
     case (opcode)
       `OPC_JAL  : jump_addr = pc + $signed(imm);
@@ -163,14 +170,17 @@ module decode (
   // Predecode the instruction ALU
   always @(*) begin : proc_alu_decode
     case (opcode)
-      `OPC_ARI_RTYPE : begin
-                        if (funct3 == `FNC_ADD_SUB) begin
-                          alu_predecode <= (instr[30] == 1'b0)  ? `ALU_ADD : `ALU_SUB;
-                        end else begin
+      `OPC_ARI_RTYPE, `OPC_ARI_ITYPE : begin
+                        if ((funct3 == `FNC_ADD_SUB) && (opcode == `OPC_ARI_RTYPE)) begin
+                          // alu_predecode <= (funct7[5] == 1'b0)  ? `ALU_ADD : `ALU_SUB;
                           alu_predecode <= {funct7[5], funct3};
+                        end else if (funct3 == `FNC_SRL_SRA) begin
+                          alu_predecode <= {funct7[5], funct3};
+                        end else begin
+                          alu_predecode <= {1'b0, funct3};
                         end
                       end                 
-      `OPC_ARI_ITYPE: alu_predecode <= {1'b0, funct3};          
+      // `OPC_ARI_ITYPE: alu_predecode <= {1'b0, funct3};          
       `OPC_LUI:       alu_predecode <= `ALU_COPY_B;
       `OPC_BRANCH:    alu_predecode <= `ALU_ADD;
       `OPC_JAL:       alu_predecode <= `ALU_ADD;
@@ -182,17 +192,104 @@ module decode (
     endcase
   end
 
+  // Check for data hazard
   always @(*) begin : proc_data_dep
-    case (opcode)
-      `OPC_ARI_RTYPE, 
-        `OPC_ARI_ITYPE, 
-        `OPC_JALR, 
-        `OPC_CSR: data_dep = (((rs1 == wb_rd) && data_dep_check_rs1) || 
-                              ((rs2 == wb_rd) && data_dep_check_rs2)) && (wb_rd != 'b0) ? 1'b1 : 1'b0;
-        `OPC_LOAD, `OPC_STORE: data_dep = mem_stall;
-      default : data_dep = 1'b0;
-    endcase
+    // case (opcode)
+    //   `OPC_ARI_RTYPE, 
+    //     `OPC_ARI_ITYPE, 
+    //     `OPC_JALR, 
+    //     `OPC_CSR, `OPC_STORE: data_dep = (((rs1 === wb_rd) && data_dep_check_rs1) || 
+    //                           ((rs2 === wb_rd) && data_dep_check_rs2)) && (wb_rd !== 'b0) ? 1'b1 : 1'b0;
+    //   `OPC_LOAD: data_dep = mem_stall;
+    //   default : data_dep = 1'b0;
+    // endcase
+
+    data_dep = (((rs1 === wb_rd) && data_dep_check_rs1) || 
+                ((rs2 === wb_rd) && data_dep_check_rs2)) && (wb_rd !== 'b0) ? 1'b1 : 1'b0;
   end
+
+  // Partial store
+  always @(*) begin : proc_part_store
+    if ((opcode == `OPC_STORE) && (stall == 1'b0)) begin
+      case (funct3)
+        `FNC_SB: begin
+                  mem_we = 4'h1 << mem_addr[1:0]; 
+                  mem_wdata = ({24'b0,rs2data[7:0]} << 8*mem_addr[1:0]);
+                end
+        `FNC_SH: begin 
+                mem_we = (mem_addr[1] == 1'b1) ? 4'b1100 : 4'b0011; 
+                mem_wdata = (mem_addr[1] == 1'b1) ? {rs2data[15:0], 16'b0} :  {16'b0,rs2data[15:0]}; 
+              end
+        `FNC_SW: begin 
+                mem_we = 4'hf;      
+                mem_wdata = rs2data;
+                end          
+        default: begin 
+                mem_we = 4'hf;      
+                mem_wdata = rs2data;
+              end 
+      endcase
+    end else begin
+      mem_we = 4'h0;
+      mem_wdata = rs2data;
+    end
+
+   end 
+
+  // Partial load
+  always @(*) begin : proc_part_ld
+    // case(funct3)
+    //   `FNC_LB:
+    //   `FNC_LH:
+    //   `FNC_LW:
+    //   `FNC_LBU:
+    //   `FNC_LHU:
+
+    // endcase
+
+
+    case (wb_mask)
+      `FNC_LB: begin
+                  case (wb_mem_alignment)
+                    2'd0: wb_data_masked = {{24{wb_data[7]}}, wb_data[7:0]};
+                    2'd1: wb_data_masked = {{24{wb_data[15]}}, wb_data[15:8]};
+                    2'd2: wb_data_masked = {{24{wb_data[23]}}, wb_data[23:16]};
+                    2'd3: wb_data_masked = {{24{wb_data[31]}}, wb_data[31:24]};
+                    default : wb_data_masked <= 'bZ;
+                  endcase
+                end
+      `FNC_LH:  begin
+                  case (wb_mem_alignment[1])
+                    1'd0: wb_data_masked = {{16{wb_data[15]}}, wb_data[15:0]};
+                    1'd1: wb_data_masked = {{16{wb_data[31]}}, wb_data[31:16]};
+                    default : wb_data_masked <= 'bZ;
+                  endcase
+                end
+      `FNC_LW:  wb_data_masked = wb_data;
+      `FNC_LBU: begin
+                  case (wb_mem_alignment)
+                    2'd0: wb_data_masked = {24'b0, wb_data[7:0]};
+                    2'd1: wb_data_masked = {24'b0, wb_data[15:8]};
+                    2'd2: wb_data_masked = {24'b0, wb_data[23:16]};
+                    2'd3: wb_data_masked = {24'b0, wb_data[31:24]};
+                    default : wb_data_masked <= 'bZ;
+                  endcase
+                end
+      // wb_data_masked = {24'b0, wb_data[7:0]};
+      `FNC_LHU: begin
+                  case (wb_mem_alignment[1])
+                    1'd0: wb_data_masked = {16'b0, wb_data[15:0]};
+                    1'd1: wb_data_masked = {16'b0, wb_data[31:16]};
+                    default : wb_data_masked <= 'bZ;
+                  endcase
+                end
+
+      // wb_data_masked = {16'b0, wb_data[15:0]};  
+      default : wb_data_masked = wb_data;
+    endcase
+   end 
+
+
 
 
   // In this microarchitecture, if an instruction has a register as both
@@ -202,7 +299,7 @@ module decode (
     if(rst) begin
       stall_dly <= 1'b0;
     end else begin
-       stall_dly <= stall;
+      stall_dly <= stall;
     end
   end
   // will be resolved after the third stage
@@ -243,18 +340,21 @@ module decode (
 
   // Memory 
   assign mem_re   = (opcode == `OPC_LOAD) ? 1'b1 : 1'b0;
-  assign mem_we   = (opcode == `OPC_STORE) ? 1'b1 : 1'b0;
+  // assign mem_we   = (opcode == `OPC_STORE) ? 1'b1 : 1'b0;
   assign mem_addr = rs1data + imm; // COMBINE WITH BRANCH and JUMP ADDER TO SAVE SPACE
+  // assign mem_wdata = rs2data;
+  assign mem_alignment = mem_addr[1:0];
 
   // Writeback
+  assign partial_ld = (opcode == `OPC_LOAD) ? funct3 : 3'b111;
   assign wb_we_int = (wb_rd == 'b0) ? 1'b0 : wb_we;   // Never write to register 0
   assign wb_op_sel = (opcode == `OPC_LOAD) ? 2'd2 : ((opcode == `OPC_JAL) || (opcode == `OPC_JALR)) ? 2'd1 : 2'd0;
   assign store     = (opcode == `OPC_STORE) ? 1'b1 : 1'b0;
 
   // Branching
   assign beq  = (rs1data == rs2data) ? 1'b1 : 1'b0;
-  assign bge  = ((rs1data > rs2data) & beq) ? 1'b1 : 1'b0;
-  assign bgeu = (($unsigned(rs1data) > $unsigned(rs2data)) & beq) ? 1'b1 : 1'b0;
+  assign bge  = (($signed(rs1data) > $signed(rs2data)) || beq) ? 1'b1 : 1'b0;
+  assign bgeu = (($unsigned(rs1data) > $unsigned(rs2data)) || beq) ? 1'b1 : 1'b0;
   assign branch_addr = pc + $signed(imm); // pc + imm;
 
   // Jump

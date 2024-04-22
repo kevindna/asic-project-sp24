@@ -2,6 +2,10 @@
 `include "const.vh"
 
 module cpu # ( parameter INSTR_WIDTH = 32) (
+  `ifdef DEBUG_OUT
+    output [`CPU_ADDR_BITS-1:0] pc_dbg,
+    output [`CPU_DATA_BITS-1:0] instr_dbg,
+  `endif
   input wire clk,
   input wire rst,
   // Data Memory
@@ -16,7 +20,9 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
   output [`CPU_ADDR_BITS-1:0] icache_addr,
   // Control Signals
   input mem_stall,
-  output [31:0] csr);
+  output [31:0] csr
+
+  );
 
   /*************************************************/
   // Signals
@@ -34,10 +40,14 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
   reg [`CPU_DATA_BITS-1:0] s2_rs2data_reg;
   reg [4:0] s2_rd_reg;
   reg [`CPU_DATA_BITS-1:0] s2_imm_reg;
+  reg [`CPU_DATA_BITS-1:0] s2_alu_out;
   reg [`CPU_ADDR_BITS-1:0] s2_mem_addr_reg;
   reg s2_kill_reg;                              // Must delay kill signal, to kill instruction coming out of I$ on next cycle
   reg [6:0] s2_opcode;
   reg [3:0] s2_aluop_reg;
+  reg [2:0] s2_wb_mask;
+  reg [1:0] s2_wb_op_sel_reg;
+  reg [1:0] s2_mem_align;
 
 
   // Hazards
@@ -64,6 +74,8 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
   wire [`CPU_DATA_BITS-1:0] imm_gen;
   wire [`CPU_ADDR_BITS-1:0] mem_addr;
   wire [`CPU_ADDR_BITS-1:0] cntrl_addr;
+  wire [2:0] partial_ld;
+  wire [1:0] dec_mem_alignment;
 
   // Writeback
   reg wb_en;
@@ -141,16 +153,21 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
     .ex_rs2data     (dec_rs2),
     .ex_rd          (dec_rd),
     .imm_gen        (imm_gen),
+    .partial_ld     (partial_ld),
     // Memory
     .mem_stall      (mem_stall),
     .mem_re         (dcache_re),
     .mem_we         (dcache_we),       // Not piplined into register; SRAM synchronous
+    .mem_wdata      (dcache_din),
     .mem_addr       (dcache_addr),   // Not piplined into register; SRAM synchronous
+    .mem_alignment  (dec_mem_alignment),
     //
     .wb_we          (wb_en),
     .wb_rd          (s2_rd_reg),
+    .wb_mask        (s2_wb_mask),
     .store          (store_instr),
     .wb_op_sel      (wb_op_sel),
+    .wb_mem_alignment(s2_mem_align),
     .wb_data        (wb_data));
 
 
@@ -166,6 +183,10 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
       s2_kill_reg     <= 1'b0;
       store_instr_reg <= 'b0;
       s2_aluop_reg    <= `ALU_XXX;
+      s2_wb_mask      <= 'b0;
+      s2_alu_out      <= 'b0;
+      s2_wb_op_sel_reg <= 'b0;
+      s2_mem_align    <= 2'b0;
     end else begin
       if (stall == 1'b0) begin 
         s2_pc_reg       <= s1_pc_reg;
@@ -177,6 +198,10 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
         s2_kill_reg     <= d_kill;
         store_instr_reg <= dcache_re;
         s2_aluop_reg    <= aluopcode;
+        s2_wb_mask      <= partial_ld;
+        s2_alu_out      <= alu_out;
+        s2_wb_op_sel_reg <= wb_op_sel;
+        s2_mem_align    <= dec_mem_alignment;
       end
     end
   end
@@ -205,20 +230,22 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
 
   // Writeback
   always @(*) begin : proc_wb
-    case (wb_op_sel)
+    case (s2_wb_op_sel_reg)
       0: wb_data = alu_out;       // R-type, I-type
-      1: wb_data = s2_pc_reg;     // jal/jalr
+      1: wb_data = s2_pc_reg + 4;     // jal/jalr
       2: wb_data = dcache_dout;   // Loads
       default : wb_data = s2_pc_reg;
     endcase
 
     case (s2_opcode)
-      `OPC_ARI_RTYPE , `OPC_ARI_ITYPE , `OPC_JALR , `OPC_CSR: wb_en = 1'b1;
-      `OPC_LOAD: wb_en = ~mem_stall;
-      default  : wb_en = 1'b0;
+      `OPC_STORE, `OPC_BRANCH : wb_en = 1'b0;          // Only instructions without writeback
+      `OPC_LOAD               : wb_en = ~mem_stall;    // Special case; If memory returned data, then store (pipeline stalls on mem access so opcode will stay)
+      default                 : wb_en = 1'b1;          // All other instructions have writeback
     endcase
   end
 
+
+  // DEBUG
   `ifdef DEBUG
     always @(posedge clk ) begin : proc_debug
       if(~rst) begin
@@ -240,7 +267,7 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
   /*************************************************/
   // Fetch
   assign f_branch_pred = 1'b1; // Always predict branch is taken
-  assign f_instr  = (s2_kill_reg == 1'b1) ? `INSTR_NOP : icache_dout;  // TODO!!!!!!!
+  assign f_instr  =  icache_dout; //(s2_kill_reg == 1'b1) ? `INSTR_NOP : icache_dout;  // TODO!!!!!!!
   assign f_pc_nxt = (stall == 1'b1) ? s1_pc_reg : (d_kill == 1'b1) ? cntrl_addr : s1_pc_reg + 'd4 ;
 
   // Decode 
@@ -255,4 +282,4 @@ module cpu # ( parameter INSTR_WIDTH = 32) (
 
   // Writeback 
 endmodule
-
+    
